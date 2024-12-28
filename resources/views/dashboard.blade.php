@@ -4,9 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Dashboard</title>
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
+       #meetingDetails {
+           font-size: 0.9rem;
+       }
+       .input-group {
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
       .bot-manage__title {
             text-align: center;
             margin-bottom: 2rem;
@@ -618,8 +625,102 @@
                             <div id="botResponseMessage" class="bot-manage__message"></div>
                         </div>
                     </div>
-                </div>
 
+                    {{-- Meeting Management --}}
+                    <div class="tab-pane fade" id="meetings">
+                        <div class="container-fluid p-4">
+                            <h2 class="mb-4"><i class="fas fa-calendar-plus"></i> Create Meetings</h2>
+
+                            <div class="row">
+                                <!-- Left Panel - Form -->
+                                <div class="col-md-7">
+                                    <div class="card shadow-sm">
+                                        <div class="card-body">
+                                            <form id="meetingForm" class="needs-validation" novalidate>
+                                                <div class="mb-3">
+                                                    <label for="customerEmail" class="form-label">
+                                                        <i class="fas fa-user"></i> Customer Email
+                                                    </label>
+                                                    <input type="email" class="form-control" id="customerEmail" required>
+                                                    <div class="invalid-feedback">
+                                                        Please provide a valid customer email.
+                                                    </div>
+                                                </div>
+
+                                                <div class="mb-3">
+                                                    <label for="professionalEmail" class="form-label">
+                                                        <i class="fas fa-user-tie"></i> Professional Email
+                                                    </label>
+                                                    <input type="email" class="form-control" id="professionalEmail" required>
+                                                    <div class="invalid-feedback">
+                                                        Please provide a valid professional email.
+                                                    </div>
+                                                </div>
+
+                                                <div class="mb-3">
+                                                    <label for="meetingDateTime" class="form-label">
+                                                        <i class="fas fa-clock"></i> Meeting Date & Time
+                                                    </label>
+                                                    <input type="datetime-local" class="form-control" id="meetingDateTime" required>
+                                                    <div class="invalid-feedback">
+                                                        Please select a valid date and time.
+                                                    </div>
+                                                </div>
+
+                                                <div class="mb-3">
+                                                    <label for="duration" class="form-label">
+                                                        <i class="fas fa-hourglass-half"></i> Duration (minutes)
+                                                    </label>
+                                                    <input type="number" class="form-control" id="duration" min="15" max="180" required>
+                                                    <div class="invalid-feedback">
+                                                        Please enter a duration between 15 and 180 minutes.
+                                                    </div>
+                                                </div>
+
+                                                <button type="submit" class="btn btn-primary">
+                                                    <i class="fas fa-save"></i> Create Meeting
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Right Panel - Response -->
+                                <div class="col-md-5">
+                                    <div class="card shadow-sm">
+                                        <div class="card-body">
+                                            <h4 class="card-title mb-3">
+                                                <i class="fas fa-link"></i> Meeting Details
+                                            </h4>
+                                            <div id="responseContainer" class="d-none">
+                                                <div class="alert alert-success mb-3" role="alert">
+                                                    Meeting created successfully!
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label class="form-label">Meeting URL</label>
+                                                    <div class="input-group">
+                                                        <input type="text" class="form-control" id="meetingUrl" readonly>
+                                                        <button class="btn btn-outline-secondary" type="button" id="copyButton">
+                                                            <i class="fas fa-copy"></i> Copy
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                <div id="meetingDetails" class="border rounded p-3 bg-light">
+                                                    <!-- Meeting details will be populated here -->
+                                                </div>
+                                            </div>
+                                            <div id="initialMessage" class="text-center text-muted py-5">
+                                                <i class="fas fa-calendar-alt fa-3x mb-3"></i>
+                                                <p>Create a meeting to see the details here</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
             </div>
         </div>
     </div>
@@ -1153,5 +1254,197 @@
         });
     </script>
 
+    {{-- Bot handling Js --}}
+    <script>
+       let autoFetchInterval = null;
+        const SEVEN_DAYS_IN_MS = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
+
+        async function sendToBotManually() {
+            try {
+                const token = getAuthToken();
+                const response = await fetch('http://127.0.0.1:8000/api/Bot-service/expenses', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const messageEl = document.getElementById('botResponseMessage');
+
+                if (response.ok) {
+                    messageEl.textContent = 'Information sent successfully!';
+                    messageEl.className = 'bot-manage__message success';
+                } else {
+                    throw new Error('Failed to send information');
+                }
+            } catch (error) {
+                const messageEl = document.getElementById('botResponseMessage');
+                messageEl.textContent = error.message;
+                messageEl.className = 'bot-manage__message error';
+            }
+        }
+
+        function toggleAutoFetch(checkbox) {
+            if (checkbox.checked) {
+                // Start the interval
+                autoFetchInterval = setInterval(sendToBotManually, SEVEN_DAYS_IN_MS);
+
+                // Store the auto-fetch state in localStorage
+                localStorage.setItem('autoFetchEnabled', 'true');
+                localStorage.setItem('autoFetchStartTime', Date.now().toString());
+
+                const messageEl = document.getElementById('botResponseMessage');
+                messageEl.textContent = 'Auto-fetch enabled successfully!';
+                messageEl.className = 'bot-manage__message success';
+            } else {
+                // Clear the interval
+                if (autoFetchInterval) {
+                    clearInterval(autoFetchInterval);
+                    autoFetchInterval = null;
+                }
+
+                // Remove the auto-fetch state from localStorage
+                localStorage.removeItem('autoFetchEnabled');
+                localStorage.removeItem('autoFetchStartTime');
+
+                const messageEl = document.getElementById('botResponseMessage');
+                messageEl.textContent = 'Auto-fetch disabled successfully!';
+                messageEl.className = 'bot-manage__message success';
+            }
+        }
+
+        // Check and restore auto-fetch state on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            const autoFetchEnabled = localStorage.getItem('autoFetchEnabled') === 'true';
+            const autoFetchStartTime = localStorage.getItem('autoFetchStartTime');
+
+            if (autoFetchEnabled && autoFetchStartTime) {
+                const checkbox = document.getElementById('autoFetchToggle');
+                checkbox.checked = true;
+
+                // Calculate remaining time until next fetch
+                const timePassed = Date.now() - parseInt(autoFetchStartTime);
+                const remainingTime = SEVEN_DAYS_IN_MS - (timePassed % SEVEN_DAYS_IN_MS);
+
+                // Start the interval with the remaining time
+                setTimeout(() => {
+                    sendToBotManually();
+                    autoFetchInterval = setInterval(sendToBotManually, SEVEN_DAYS_IN_MS);
+                }, remainingTime);
+            }
+        });
+    </script>
+
+    {{-- Meetings hndling Js --}}
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('meetingForm');
+            const responseContainer = document.getElementById('responseContainer');
+            const initialMessage = document.getElementById('initialMessage');
+            const meetingDetails = document.getElementById('meetingDetails');
+            const copyButton = document.getElementById('copyButton');
+            const meetingUrl = document.getElementById('meetingUrl');
+
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+
+                // Form validation
+                if (!form.checkValidity()) {
+                    e.stopPropagation();
+                    form.classList.add('was-validated');
+                    return;
+                }
+
+                // Prepare the data
+                const meetingData = {
+                    customer_email: document.getElementById('customerEmail').value,
+                    professional_email: document.getElementById('professionalEmail').value,
+                    start_date_time: new Date(document.getElementById('meetingDateTime').value)
+                        .toISOString().slice(0, 19).replace('T', ' '),
+                    duration: parseInt(document.getElementById('duration').value)
+                };
+
+                // Send the request
+                fetch('http://127.0.0.1:8000/api/Meetings-Management-service/create', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(meetingData)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    // Show response container and hide initial message
+                    responseContainer.classList.remove('d-none');
+                    initialMessage.classList.add('d-none');
+
+                    // Update meeting details
+                    meetingUrl.value = data.meetup_url || 'Meeting URL will appear here';
+                    meetingDetails.innerHTML = `
+                        <h6>Meeting Information:</h6>
+                        <p><strong>Message:</strong> ${data.message}</p>
+                        <p><strong>Customer:</strong> ${meetingData.customer_email}</p>
+                        <p><strong>Professional:</strong> ${meetingData.professional_email}</p>
+                        <p><strong>Meeting ID:</strong> ${data.meeting_id}</p>
+                        <p><strong>Date & Time:</strong> ${data.start_time}</p>
+                        <p><strong>Duration:</strong> ${meetingData.duration} minutes</p>
+                        <p><strong>Meeting URL:</strong> <a href="${data.meetup_url}" target="_blank">Join Meeting</a></p>
+                    `;
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    meetingDetails.innerHTML = `<p class="text-danger">An error occurred while creating the meeting. Please try again later.</p>`;
+                });
+
+            });
+
+            // Copy to clipboard functionality
+            copyButton.addEventListener('click', function() {
+                meetingUrl.select();
+                document.execCommand('copy');
+
+                // Show feedback
+                const originalText = copyButton.innerHTML;
+                copyButton.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                setTimeout(() => {
+                    copyButton.innerHTML = originalText;
+                }, 2000);
+            });
+        });
+    </script>
+
+    {{-- logout methode --}}
+    <script>
+        // Logout method
+        function handleLogout() {
+            const token = localStorage.getItem('auth_token');
+            if (!token) {
+                window.location.href = '/login';
+                return;
+            }
+
+            fetch('http://127.0.0.1:8000/api/user-management-service/auth/logout', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                }
+            })
+            .then(response => {
+                if (response.ok) {
+                    // Clear token and redirect to home page
+                    localStorage.removeItem('auth_token');
+                    window.location.href = '/';
+                } else {
+                    console.error('Logout failed:', response.statusText);
+                }
+            })
+            .catch(error => {
+                console.error('Error during logout:', error);
+            });
+        }
+
+    </script>
 </body>
 </html>
