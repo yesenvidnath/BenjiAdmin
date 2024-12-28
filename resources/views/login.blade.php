@@ -199,11 +199,11 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // Check if user is already logged in
-        document.addEventListener('DOMContentLoaded', function() {
-            const token = localStorage.getItem('api_token');
+         // Check if user is already logged in
+         document.addEventListener('DOMContentLoaded', function() {
+            const token = localStorage.getItem('auth_token');
             if (token) {
-                window.location.href = '/admin/dashboard';
+                window.location.href = '/admin-dashboard';
             }
         });
 
@@ -231,9 +231,8 @@
                         'Content-Type': 'application/json',
                         'Accept': 'application/json',
                         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content'),
-                        // Remove any custom headers that aren't necessary
                     },
-                    credentials: 'include',  // This is correct for handling cookies
+                    credentials: 'include',
                     body: JSON.stringify({
                         email: email,
                         password: password,
@@ -244,9 +243,32 @@
                 const data = await response.json();
 
                 if (response.ok && data.token) {
-                    // Store token and redirect
-                    localStorage.setItem('api_token', data.token);
-                    window.location.href = '/admin/dashboard';
+                    // Store token in multiple storage mechanisms for different use cases
+                    localStorage.setItem('auth_token', data.token);
+
+                    // If remember me is checked, also store in localStorage
+                    if (rememberMe) {
+                        localStorage.setItem('remember_token', data.token);
+                    }
+
+                    // Set token in sessionStorage for temporary session
+                    sessionStorage.setItem('auth_token', data.token);
+
+                    // Optional: Store token expiry time if needed
+                    const expiryTime = new Date().getTime() + (24 * 60 * 60 * 1000); // 24 hours from now
+                    localStorage.setItem('token_expiry', expiryTime);
+
+                    // Show success message
+                    const successAlert = document.createElement('div');
+                    successAlert.className = 'alert alert-success';
+                    successAlert.innerHTML = '<i class="fas fa-check-circle me-2"></i>Login successful! Redirecting...';
+                    errorAlert.parentNode.insertBefore(successAlert, errorAlert);
+
+                    // Redirect after a short delay
+                    setTimeout(() => {
+                        window.location.href = '/admin/dashboard';
+                    }, 1000);
+
                 } else {
                     // Show error message
                     errorMessage.textContent = data.message || 'Invalid credentials. Please try again.';
@@ -270,6 +292,18 @@
                 btnText.innerHTML = '<i class="fas fa-sign-in-alt me-2"></i>Login';
                 loginBtn.disabled = false;
             }
+        }
+
+        // Function to get the stored auth token
+        function getAuthToken() {
+            return localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token');
+        }
+
+        // Function to check if token is expired
+        function isTokenExpired() {
+            const expiry = localStorage.getItem('token_expiry');
+            if (!expiry) return true;
+            return new Date().getTime() > parseInt(expiry);
         }
 
         // Toggle password visibility
